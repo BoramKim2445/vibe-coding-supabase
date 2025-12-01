@@ -53,7 +53,7 @@ export const useSubmitMagazine = () => {
         const fileName = `${datePath}/${uuid}.jpg`;
 
         // 1-4. Supabase Storage에 업로드
-        const { data: uploadData, error: uploadError } = await supabase.storage.from("vibe-condig-supabse-storage").upload(fileName, data.imageFile, {
+        const { error: uploadError } = await supabase.storage.from("vibe-condig-supabse-storage").upload(fileName, data.imageFile, {
           contentType: data.imageFile.type,
           upsert: false,
         });
