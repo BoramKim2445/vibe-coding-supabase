@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { LogIn, PenSquare, Sparkles } from "lucide-react";
+import { useMagazines } from './index.binding.hook';
 
 interface ArticleItem {
   imageUrl: string;
@@ -96,6 +97,42 @@ const getCategoryColor = (category: string) => {
 
 export default function GlossaryCards() {
   const router = useRouter();
+  const { magazines, loading, error } = useMagazines();
+
+  // 카드 클릭 핸들러
+  const handleCardClick = (id: string) => {
+    router.push(`/magazines/${id}`);
+  };
+
+  // 로딩 상태 표시
+  if (loading) {
+    return (
+      <div className="magazine-container">
+        <div className="magazine-header">
+          <h1>IT 매거진</h1>
+          <p className="magazine-subtitle">최신 기술 트렌드와 인사이트를 전합니다</p>
+        </div>
+        <div className="text-center py-20">
+          <p className="text-gray-600">데이터를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 에러 상태 표시
+  if (error) {
+    return (
+      <div className="magazine-container">
+        <div className="magazine-header">
+          <h1>IT 매거진</h1>
+          <p className="magazine-subtitle">최신 기술 트렌드와 인사이트를 전합니다</p>
+        </div>
+        <div className="text-center py-20">
+          <p className="text-red-600">에러가 발생했습니다: {error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="magazine-container">
@@ -128,26 +165,31 @@ export default function GlossaryCards() {
       </div>
       
       <div className="magazine-grid">
-        {articleData.map((article, index) => (
-          <article key={index} className="magazine-card">
+        {magazines.map((magazine) => (
+          <article 
+            key={magazine.id} 
+            className="magazine-card cursor-pointer hover:shadow-xl transition-shadow"
+            onClick={() => handleCardClick(magazine.id)}
+          >
             <div className="magazine-card-image">
               <img 
-                src={article.imageUrl}
-                alt={article.title}
+                src={magazine.image_url} 
+                alt={magazine.title}
+                className="w-full h-full object-cover"
               />
-              <div className={`magazine-card-category ${getCategoryColor(article.category)}`}>
-                {article.category}
+              <div className={`magazine-card-category ${getCategoryColor(magazine.category)}`}>
+                {magazine.category}
               </div>
             </div>
             
             <div className="magazine-card-content">
-              <h2 className="magazine-card-title">{article.title}</h2>
-              <p className="magazine-card-summary">{article.summary}</p>
+              <h2 className="magazine-card-title">{magazine.title}</h2>
+              <p className="magazine-card-summary">{magazine.description}</p>
               
               <div className="magazine-card-tags">
-                {article.tags.map((tag, tagIndex) => (
+                {magazine.tags && magazine.tags.map((tag, tagIndex) => (
                   <span key={tagIndex} className="magazine-tag">
-                    #{tag}
+                    {tag.startsWith('#') ? tag : `#${tag}`}
                   </span>
                 ))}
               </div>
