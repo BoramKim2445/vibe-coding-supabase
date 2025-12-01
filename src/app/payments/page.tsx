@@ -1,18 +1,15 @@
-'use client';
+"use client";
 
 import { ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { usePaymentSubscription } from "./hooks/index.payment.hook";
 
 export default function GlossaryPayments() {
   const router = useRouter();
+  const { handleSubscribe, isProcessing } = usePaymentSubscription();
 
   const handleNavigateToList = () => {
-    router.push('/magazines');
-  };
-
-  const handleSubscribe = () => {
-    alert('구독이 완료되었습니다!');
-    handleNavigateToList();
+    router.push("/magazines");
   };
 
   return (
@@ -30,9 +27,7 @@ export default function GlossaryPayments() {
         <div className="payment-card">
           <div className="payment-card-header">
             <h2 className="payment-plan-title">월간 구독</h2>
-            <p className="payment-plan-description">
-              모든 IT 매거진 콘텐츠에 무제한 접근
-            </p>
+            <p className="payment-plan-description">모든 IT 매거진 콘텐츠에 무제한 접근</p>
           </div>
 
           <div className="payment-card-body">
@@ -44,35 +39,48 @@ export default function GlossaryPayments() {
             <div className="payment-features">
               <div className="payment-feature-item">
                 <svg className="payment-check-icon" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
                 </svg>
                 <span>모든 프리미엄 아티클 열람</span>
               </div>
               <div className="payment-feature-item">
                 <svg className="payment-check-icon" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
                 </svg>
                 <span>최신 기술 트렌드 리포트</span>
               </div>
               <div className="payment-feature-item">
                 <svg className="payment-check-icon" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
                 </svg>
                 <span>광고 없는 읽기 환경</span>
               </div>
               <div className="payment-feature-item">
                 <svg className="payment-check-icon" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
                 </svg>
                 <span>언제든지 구독 취소 가능</span>
               </div>
             </div>
 
-            <button 
-              className="payment-subscribe-button"
-              onClick={handleSubscribe}
-            >
-              구독하기
+            <button className="payment-subscribe-button" onClick={handleSubscribe} disabled={isProcessing}>
+              {isProcessing ? "처리 중..." : "구독하기"}
             </button>
           </div>
         </div>
