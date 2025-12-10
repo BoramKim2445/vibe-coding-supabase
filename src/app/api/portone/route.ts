@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { randomUUID } from "crypto";
+import axios from "axios";
 
 // 포트원 API 기본 설정
 const PORTONE_API_BASE_URL = "https://api.portone.io";
@@ -23,6 +24,24 @@ interface PortOnePaymentInfo {
 interface WebhookRequest {
   payment_id: string;
   status: "Paid" | "Cancelled";
+}
+
+// Supabase Payment 타입
+interface PaymentRecord {
+  transaction_key: string;
+  amount: number;
+  status: string;
+  start_at: string;
+  end_at: string;
+  end_grace_at: string;
+  next_schedule_at: string;
+  next_schedule_id: string;
+}
+
+// 포트원 예약 결제 조회 결과 타입
+interface ScheduledPaymentItem {
+  id: string;
+  paymentId: string;
 }
 
 /**
@@ -134,6 +153,103 @@ async function scheduleNextPayment(nextScheduleId: string, paymentInfo: PortOneP
 }
 
 /**
+ * Supabase에서 결제 정보 조회
+ */
+async function getPaymentFromSupabase(transactionKey: string): Promise<PaymentRecord> {
+  const { data, error } = await supabase
+    .from("payment")
+    .select("*")
+    .eq("transaction_key", transactionKey)
+    .single();
+
+  if (error) {
+    throw new Error(`Supabase 조회 실패: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
+ * Supabase에 취소 내역 저장
+ */
+async function saveCancelledPaymentToSupabase(originalPayment: PaymentRecord) {
+  const { data, error } = await supabase.from("payment").insert({
+    transaction_key: originalPayment.transaction_key,
+    amount: -originalPayment.amount,
+    status: "Cancel",
+    start_at: originalPayment.start_at,
+    end_at: originalPayment.end_at,
+    end_grace_at: originalPayment.end_grace_at,
+    next_schedule_at: originalPayment.next_schedule_at,
+    next_schedule_id: originalPayment.next_schedule_id,
+  });
+
+  if (error) {
+    throw new Error(`Supabase 취소 내역 저장 실패: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
+ * 포트원 예약된 결제 조회 (GET with body using axios)
+ */
+async function getScheduledPayments(billingKey: string, nextScheduleAt: string): Promise<ScheduledPaymentItem[]> {
+  const nextScheduleDate = new Date(nextScheduleAt);
+  const fromDate = new Date(nextScheduleDate);
+  fromDate.setDate(fromDate.getDate() - 1);
+  const untilDate = new Date(nextScheduleDate);
+  untilDate.setDate(untilDate.getDate() + 1);
+
+  try {
+    const response = await axios.get(`${PORTONE_API_BASE_URL}/payment-schedules`, {
+      headers: {
+        Authorization: `PortOne ${PORTONE_API_SECRET}`,
+        "Content-Type": "application/json",
+      },
+      data: {
+        filter: {
+          billingKey: billingKey,
+          from: fromDate.toISOString(),
+          until: untilDate.toISOString(),
+        },
+      },
+    });
+
+    return response.data.items || [];
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(`포트원 예약 결제 조회 실패: ${error.response?.status || error.message}`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * 포트원 예약 취소
+ */
+async function cancelScheduledPayment(scheduleId: string) {
+  try {
+    const response = await axios.delete(`${PORTONE_API_BASE_URL}/payment-schedules`, {
+      headers: {
+        Authorization: `PortOne ${PORTONE_API_SECRET}`,
+        "Content-Type": "application/json",
+      },
+      data: {
+        scheduleIds: [scheduleId],
+      },
+    });
+
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(`포트원 예약 취소 실패: ${error.response?.status || error.message}`);
+    }
+    throw error;
+  }
+}
+
+/**
  * POST /api/portone
  * 포트원 구독 결제 웹훅 처리
  */
@@ -180,13 +296,49 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 3. Cancelled 상태 처리 (필요시 추가 구현)
+    // 3. Cancelled 상태 처리
     if (status === "Cancelled") {
-      checklist.push("✓ Cancelled 상태 확인 (추가 처리 없음)");
+      // 3-1. 구독결제취소시나리오
+      // 3-1-1. Supabase에서 결제 정보 조회
+      const originalPayment = await getPaymentFromSupabase(payment_id);
+      checklist.push(`✓ Supabase 결제 정보 조회 완료 (transaction_key: ${originalPayment.transaction_key})`);
+
+      // 3-1-2. Supabase에 취소 내역 저장
+      await saveCancelledPaymentToSupabase(originalPayment);
+      checklist.push(`✓ Supabase 취소 내역 저장 완료 (금액: -${originalPayment.amount}원)`);
+
+      // 3-2. 다음달구독예약취소시나리오
+      // 3-2-1. 포트원에서 결제 정보 조회
+      const paymentInfo = await fetchPaymentInfo(payment_id);
+      checklist.push(`✓ 포트원 결제 정보 조회 완료 (결제ID: ${paymentInfo.id})`);
+
+      // 3-2-2. 예약된 결제 정보 조회
+      if (!paymentInfo.billingKey) {
+        throw new Error("빌링키가 없습니다");
+      }
+      const scheduledPayments = await getScheduledPayments(
+        paymentInfo.billingKey,
+        originalPayment.next_schedule_at
+      );
+      checklist.push(`✓ 포트원 예약된 결제 정보 조회 완료 (${scheduledPayments.length}개 발견)`);
+
+      // 3-2-3. next_schedule_id와 일치하는 예약 추출
+      const matchedSchedule = scheduledPayments.find(
+        (item) => item.paymentId === originalPayment.next_schedule_id
+      );
+
+      if (!matchedSchedule) {
+        throw new Error("일치하는 예약 결제를 찾을 수 없습니다");
+      }
+      checklist.push(`✓ 예약 결제 매칭 완료 (scheduleId: ${matchedSchedule.id})`);
+
+      // 3-2-4. 포트원 예약 취소
+      await cancelScheduledPayment(matchedSchedule.id);
+      checklist.push(`✓ 포트원 예약 취소 완료 (scheduleId: ${matchedSchedule.id})`);
 
       return NextResponse.json({
         success: true,
-        message: "결제 취소 확인",
+        message: "구독 취소 처리 완료",
         checklist,
       });
     }
@@ -204,3 +356,5 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+
